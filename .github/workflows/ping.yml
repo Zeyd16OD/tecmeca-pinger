@@ -1,0 +1,41 @@
+name: Ping bot stock Tecmeca
+
+# Declencheur 24/7 gratuit du bot de surveillance (heberge sur Vercel).
+# Depot PUBLIC => minutes GitHub Actions illimitees et gratuites.
+# Le jeton n'est JAMAIS ecrit ici : il est lu depuis le secret CHECK_TOKEN.
+
+on:
+  schedule:
+    # Toutes les 5 min. Dans chaque execution on ping 3 fois (0s, 120s, 240s)
+    # => un appel environ toutes les 2 min.
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tecmeca-ping
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Appeler /api/check (3 fois, ~toutes les 2 min)
+        env:
+          CHECK_TOKEN: ${{ secrets.CHECK_TOKEN }}
+        run: |
+          set -u
+          URL="https://tecmeca-stock-bot.vercel.app/api/check"
+          for i in 1 2 3; do
+            code=$(curl -sS -m 90 -o body.json -w '%{http_code}' \
+              -H "accept: application/json" \
+              -H "x-check-token: ${CHECK_TOKEN}" \
+              "$URL" || echo "000")
+            echo "Ping ${i} -> HTTP ${code} @ $(date -u +%H:%M:%SZ)"
+            head -c 400 body.json 2>/dev/null || true
+            echo
+            if [ "$i" -lt 3 ]; then sleep 120; fi
+          done
